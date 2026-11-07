@@ -1,0 +1,231 @@
+Experiment 5
+
+Create a Library with 4 collections (books, members, borrow Records, authors) and validation rules  insert  least 10 documents.  In this exercise create  indexes examples (single-field, compound, text, unique) and show performance test with explain().
+a.	Create & Use Database and Collections with Validation
+b.	Insert Sample Documents (10 each)
+c.	Index Creation
+i.	Single-field index 
+ii.	Compound index
+iii.	Text index
+iv.	Unique index
+d.	Performance Test with explain()
+i.	Without Index
+ii.	With Index
+e.	Library Database — Additional Indexed Queries
+i.	Find books by a specific author quickly
+ii.	Search books by title keyword (text index)
+iii.	Find overdue books efficiently
+iv.	Get borrowing history of a specific member, sorted by date
+
+a.	Create & Use Database
+use LibraryDB
+
+//Books Collection
+db.createCollection("books", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["isbn", "title", "authorId", "publishedYear", "copiesAvailable"],
+            properties: {
+                isbn: { bsonType: "string", description: "must be a string and unique" },
+                title: { bsonType: "string" },
+                authorId: { bsonType: "int" },
+                publishedYear: { bsonType: "int", minimum: 1500, maximum: 2025 },
+                copiesAvailable: { bsonType: "int", minimum: 0 }
+            }
+        }
+    }
+})
+
+//Members Collection
+db.createCollection("members", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["memberId", "name", "age", "membershipType"],
+            properties: {
+                memberId: { bsonType: "int" },
+                name: { bsonType: "string" },
+                age: { bsonType: "int", minimum: 5, maximum: 100 },
+                membershipType: { enum: ["Standard", "Premium", "Student"] }
+            }
+        }
+    }
+})
+
+//Borrow Records
+db.createCollection("borrowRecords", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["recordId", "memberId", "isbn", "borrowDate", "returnDate"],
+            properties: {
+                recordId: { bsonType: "int" },
+                memberId: { bsonType: "int" },
+                isbn: { bsonType: "string" },
+                borrowDate: { bsonType: "date" },
+                returnDate: { bsonType: "date" }
+            }
+        }
+    }
+})
+
+//Authors Collection
+db.createCollection("authors", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["authorId", "name", "country"],
+            properties: {
+                authorId: { bsonType: "int" },
+                name: { bsonType: "string" },
+                country: { bsonType: "string" }
+            }
+        }
+    }
+})
+
+b.	Insert Sample Documents (10 each)
+db.books.insertMany([
+    { isbn: "B001", title: "MongoDB Basics", authorId: 1, publishedYear: 2020, copiesAvailable: 5 },
+    { isbn: "B002", title: "Node.js in Action", authorId: 2, publishedYear: 2019, copiesAvailable: 3 },
+    { isbn: "B003", title: "Python Programming", authorId: 3, publishedYear: 2021, copiesAvailable: 7 },
+    { isbn: "B004", title: "Java for Beginners", authorId: 4, publishedYear: 2018, copiesAvailable: 4 },
+    { isbn: "B005", title: "Data Structures", authorId: 5, publishedYear: 2022, copiesAvailable: 6 },
+    { isbn: "B006", title: "Algorithms Unlocked", authorId: 5, publishedYear: 2020, copiesAvailable: 2 },
+    { isbn: "B007", title: "Database Systems", authorId: 6, publishedYear: 2017, copiesAvailable: 8 },
+    { isbn: "B008", title: "AI and ML", authorId: 7, publishedYear: 2023, copiesAvailable: 10 },
+    { isbn: "B009", title: "Deep Learning", authorId: 7, publishedYear: 2021, copiesAvailable: 9 },
+    { isbn: "B010", title: "Cloud Computing", authorId: 8, publishedYear: 2019, copiesAvailable: 4 }
+])
+
+db.members.insertMany([
+    { memberId: 1, name: "Alice", age: 25, membershipType: "Premium" },
+    { memberId: 2, name: "Bob", age: 32, membershipType: "Standard" },
+    { memberId: 3, name: "Charlie", age: 19, membershipType: "Student" },
+    { memberId: 4, name: "David", age: 45, membershipType: "Premium" },
+    { memberId: 5, name: "Eve", age: 28, membershipType: "Standard" },
+    { memberId: 6, name: "Frank", age: 35, membershipType: "Standard" },
+    { memberId: 7, name: "Grace", age: 22, membershipType: "Student" },
+    { memberId: 8, name: "Helen", age: 29, membershipType: "Premium" },
+    { memberId: 9, name: "Ivy", age: 31, membershipType: "Standard" },
+    { memberId: 10, name: "Jack", age: 27, membershipType: "Premium" }
+])
+
+db.borrowRecords.insertMany([
+    { recordId: 1, memberId: 1, isbn: "B003", borrowDate: new Date("2025-01-10"), returnDate: new Date("2025-01-20") },
+    { recordId: 2, memberId: 3, isbn: "B001", borrowDate: new Date("2025-01-11"), returnDate: new Date("2025-01-21") },
+    { recordId: 3, memberId: 2, isbn: "B004", borrowDate: new Date("2025-01-12"), returnDate: new Date("2025-01-22") },
+    { recordId: 4, memberId: 5, isbn: "B002", borrowDate: new Date("2025-01-13"), returnDate: new Date("2025-01-23") },
+    { recordId: 5, memberId: 4, isbn: "B005", borrowDate: new Date("2025-01-14"), returnDate: new Date("2025-01-24") },
+    { recordId: 6, memberId: 6, isbn: "B006", borrowDate: new Date("2025-01-15"), returnDate: new Date("2025-01-25") },
+    { recordId: 7, memberId: 8, isbn: "B007", borrowDate: new Date("2025-01-16"), returnDate: new Date("2025-01-26") },
+    { recordId: 8, memberId: 7, isbn: "B008", borrowDate: new Date("2025-01-17"), returnDate: new Date("2025-01-27") },
+    { recordId: 9, memberId: 9, isbn: "B009", borrowDate: new Date("2025-01-18"), returnDate: new Date("2025-01-28") },
+    { recordId: 10, memberId: 10, isbn: "B010", borrowDate: new Date("2025-01-19"), returnDate: new Date("2025-01-29") }
+])
+
+db.authors.insertMany([
+    { authorId: 1, name: "John Doe", country: "USA" },
+    { authorId: 2, name: "Jane Smith", country: "UK" },
+    { authorId: 3, name: "Robert Brown", country: "Canada" },
+    { authorId: 4, name: "Emily Davis", country: "Australia" },
+    { authorId: 5, name: "Michael Wilson", country: "USA" },
+    { authorId: 6, name: "Sarah Johnson", country: "India" },
+    { authorId: 7, name: "David Lee", country: "China" },
+    { authorId: 8, name: "Sophia Martinez", country: "Mexico" },
+    { authorId: 9, name: "Chris White", country: "Germany" },
+    { authorId: 10, name: "Linda Hall", country: "France" }
+])
+
+c.	Index Creation
+i.	Single-field index 
+// Single-field index on ISBN
+db.books.createIndex({ isbn: 1 })
+
+ii.	Compound index
+// Compound index on (memberId, borrowDate)
+db.borrowRecords.createIndex({ memberId: 1, borrowDate: -1 })
+
+iii.	Text index
+//Text index for book title searches
+db.books.createIndex({ title: "text" })
+
+iv.	Unique index
+// Unique index on memberId
+db.members.createIndex({ memberId: 1 }, { unique: true })
+
+v.	Performance Test with explain()
+d.	Without Index
+db.books.dropIndexes()
+db.books.find({ isbn: "B007" }).explain("executionStats")
+e.	With Index
+db.books.createIndex({ isbn: 1 })
+db.books.find({ isbn: "B007" }).explain("executionStats")
+
+f.	Library Database — Additional Indexed Queries
+i.	Find books by a specific author quickly
+// Create index on author for fast lookup
+db.books.createIndex({ author: 1 })
+
+// Query to find all books by "George Orwell"
+db.books.find({ author: "George Orwell" }).explain("executionStats")
+
+ii.	Search books by title keyword (text index)
+// Create text index on title
+db.books.createIndex({ title: "text" })
+
+// Search for books containing the word "Mockingbird"
+db.books.find({ $text: { $search: "Mockingbird" } }).explain("executionStats")
+
+iii.	Find overdue books efficiently
+// Create index on dueDate for borrowings
+db.borrowings.createIndex({ dueDate: 1 })
+
+// Find books that are overdue (before today)
+db.borrowings.find({ dueDate: { $lt: new Date() } }).explain("executionStats")
+
+iv.	Get borrowing history of a specific member, sorted by date
+// Create compound index for memberId and borrowDate
+db.borrowings.createIndex({ memberId: 1, borrowDate: -1 })
+
+// Find member's borrowing history
+db.borrowings.find({ memberId: 105 }).sort({ borrowDate: -1 }).explain("executionStats")
+OUTPUT:
+
+Without Index
+
+"executionTimeMillis" : 12,
+"totalDocsExamined" : 500
+
+With Index
+
+"executionTimeMillis" : 1,
+"totalDocsExamined" : 1
+
+Overdue Books
+
+{ bookTitle: 'MongoDB Basics', member: 'Anjali', dueDate: ISODate("2025-02-01") }
+
+Borrowing History
+
+{ member: 'Anjali', book: 'DBMS Concepts', borrowDate: ISODate("2025-01-10") }
+{ member: 'Anjali', book: 'NoSQL Guide', borrowDate: ISODate("2025-01-25") }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

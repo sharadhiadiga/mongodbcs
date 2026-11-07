@@ -1,0 +1,45 @@
+import tkinter as tk
+from tkinter import messagebox
+from pymongo import MongoClient
+
+db = MongoClient("mongodb://localhost:27017/")["collegeDB"]
+col = db["students"]
+
+def insert():
+    n,r,b,c=[e.get() for e in entries]
+    if not all([n,r,b,c]):
+        messagebox.showwarning("Error","Enter all details")
+    else:
+        try:
+            col.insert_one({"name":n,"roll":r,"batch":b,"cgpa":float(c)})
+            messagebox.showinfo("Success","Record inserted")
+            for e in entries:
+                e.delete(0,tk.END)
+        except ValueError:
+            messagebox.showerror("Error","Invalid CGPA")
+
+def display():
+    result.delete("1.0",tk.END)
+    for s in col.find():
+        result.insert(tk.END,f"{s['name']}|{s['roll']}|{s['batch']}|{s['cgpa']}\n")
+                      
+app = tk.Tk()
+app.title("Student Database App")
+
+entries=[]
+for i,label in enumerate(["Name","Roll no","Batch","CGPA"]):
+    tk.Label(app,text=label).grid(row=i,column=0)
+    e=tk.Entry(app)
+    e.grid(row=i,column=1)
+    entries.append(e)
+    
+tk.Button(app,text="Insert student",command=insert).grid(row=4,columnspan=2)
+tk.Button(app,text="Display students",command=display).grid(row=5,columnspan=2)
+
+result=tk.Text(app,width=50,height=10)
+result.grid(row=6,columnspan=2)
+
+app.mainloop()
+
+                      
+                      

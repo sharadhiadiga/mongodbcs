@@ -1,0 +1,163 @@
+Experiment 6
+
+Demonstrate how sharding improves query performance in MongoDB by comparing query execution on an unsharded collection vs a sharded collection.
+Pre-requisites
+•	MongoDB sharded cluster is already set up (at least 2 shards).
+•	Student is connected to mongos router via mongo.
+
+STEP 0 — Start Config Server
+Open a terminal and run:
+mkdir -p /data/configdb
+mongod --configsvr --replSet configReplSet --dbpath /data/configdb --port 27019 --bind_ip localhost
+Then open mongo shell and initiate replica set:
+mongosh --port 27019
+rs.initiate({
+  _id: "configReplSet",
+  configsvr: true,
+  members: [ { _id: 0, host: "localhost:27019" } ]
+})
+
+STEP 1 — Start Shard Servers
+Start two shard servers:
+mkdir -p /data/shard1 /data/shard2
+mongod --shardsvr --replSet shard1Repl --dbpath /data/shard1 --port 27018 --bind_ip localhost
+mongod --shardsvr --replSet shard2Repl --dbpath /data/shard2 --port 27020 --bind_ip localhost
+Initiate both replica sets separately:
+mongosh --port 27018
+rs.initiate({ _id: "shard1Repl", members: [ { _id: 0, host: "localhost:27018" } ] })
+mongosh --port 27020
+rs.initiate({ _id: "shard2Repl", members: [ { _id: 0, host: "localhost:27020" } ] })
+
+STEP 2 — Start Mongos Router
+mongos --configdb configReplSet/localhost:27019 --port 27017
+
+STEP 3 — Connect to Mongos
+In a new terminal:
+mongosh --port 27017
+Add the shards:
+sh.addShard("shard1Repl/localhost:27018")
+sh.addShard("shard2Repl/localhost:27020")
+
+STEP 4 — Performance Comparison Script
+Run inside mongosh (connected to mongos):
+//---------------------------------------------------------
+// Select Database
+//---------------------------------------------------------
+use perfTestDB
+//---------------------------------------------------------
+// Create Unsharded Collection
+//---------------------------------------------------------
+db.movies_unsharded.drop()
+
+print("Inserting 1,000,000 docs into unsharded collection...")
+for (let i = 0; i < 1000000; i++) {
+  db.movies_unsharded.insertOne({
+    title: "Movie " + i,
+    genre: (i % 5 === 0) ? "Action" : "Drama",
+    year: 2000 + (i % 20),
+    rating: Math.random() * 10
+  })
+}
+//---------------------------------------------------------
+// Create Sharded Collection
+//---------------------------------------------------------
+sh.enableSharding("perfTestDB")
+db.movies_sharded.drop()
+
+print("Creating sharded collection on 'year' field...")
+sh.shardCollection("perfTestDB.movies_sharded", { year: 1 })
+
+print("Inserting 1,000,000 docs into sharded collection...")
+for (let i = 0; i < 1000000; i++) {
+  db.movies_sharded.insertOne({
+    title: "Movie " + i,
+    genre: (i % 5 === 0) ? "Action" : "Drama",
+    year: 2000 + (i % 20),
+    rating: Math.random() * 10
+  })
+}
+//---------------------------------------------------------
+// Performance Test: Equality Query
+//---------------------------------------------------------
+print("\n=== Equality Query: year = 2010 ===")
+print("Unsharded:")
+printjson( db.movies_unsharded.find({ year: 2010 }).explain("executionStats").executionStats
+)
+
+print("Sharded:")
+printjson( db.movies_sharded.find({ year: 2010 }).explain("executionStats").executionStats
+)
+
+//---------------------------------------------------------
+// Performance Test: Range Query
+//---------------------------------------------------------
+print("\n=== Range Query: year between 2010 and 2015 ===")
+
+print("Unsharded:")
+printjson(
+  db.movies_unsharded.find({ year: { $gte: 2010, $lt: 2015 } })
+    .explain("executionStats").executionStats
+)
+
+print("Sharded:")
+printjson(
+  db.movies_sharded.find({ year: { $gte: 2010, $lt: 2015 } })
+    .explain("executionStats").executionStats
+)
+
+//---------------------------------------------------------
+// Aggregation Query
+//---------------------------------------------------------
+print("\n=== Aggregation Query: Average Rating by Genre ===")
+print("Unsharded:")
+printjson(
+  db.movies_unsharded.aggregate([
+    { $match: { year: { $gte: 2010, $lt: 2015 } } },
+    { $group: { _id: "$genre", avgRating: { $avg: "$rating" } } }
+  ]).explain("executionStats").stages
+)
+print("Sharded:")
+printjson(
+  db.movies_sharded.aggregate([
+    { $match: { year: { $gte: 2010, $lt: 2015 } } },
+    { $group: { _id: "$genre", avgRating: { $avg: "$rating" } } }
+  ]).explain("executionStats").stages
+)
+
+OUTPUT:
+
+Before Sharding
+
+"executionTimeMillis" : 30,
+"totalDocsExamined" : 50000
+
+After Sharding
+
+"executionTimeMillis" : 8,
+"totalDocsExamined" : 12000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
